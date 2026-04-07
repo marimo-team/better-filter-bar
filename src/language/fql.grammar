@@ -1,0 +1,53 @@
+@top Query { expr }
+
+expr { OrExpr }
+
+OrExpr { AndExpr (Or AndExpr)* }
+
+AndExpr { NotExpr (And? NotExpr)* }
+
+NotExpr { Not NotExpr | primary }
+
+primary { "(" expr ")" | Filter | FreeText }
+
+Filter {
+  FieldName ":" ComparisonOp ScalarValue |
+  FieldName ":" FilterValue |
+  FieldName ComparisonOp ScalarValue
+}
+
+FilterValue { ScalarValue | "(" ValueList ")" }
+
+ValueList { ScalarValue ("," ScalarValue)* }
+
+ScalarValue { QuotedString | Number | Date | RelativeDate | Word }
+
+FieldName { Word }
+
+FreeText { QuotedString | Word }
+
+ComparisonOp { ">=" | "<=" | "!=" | "=" | ">" | "<" }
+
+Or { @specialize<Word, "OR" | "or" | "Or"> }
+And { @specialize<Word, "AND" | "and" | "And"> }
+Not { @specialize<Word, "NOT" | "not" | "Not"> }
+
+@tokens {
+  QuotedString { '"' (!["\\] | "\\" _)* '"' }
+
+  Date { $[0-9] $[0-9] $[0-9] $[0-9] "-" $[0-9] $[0-9] "-" $[0-9] $[0-9] }
+
+  Number { $[0-9]+ ("." $[0-9]+)? }
+
+  RelativeDate { "-" $[0-9]+ $[a-zA-Z] }
+
+  Word { $[a-zA-Z_\u00C0-\u024F\u0400-\u04FF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF] $[a-zA-Z0-9_.\-'\u00C0-\u024F\u0400-\u04FF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF]* }
+
+  space { @whitespace+ }
+
+  @precedence { Date, Number, RelativeDate, Word }
+}
+
+@skip { space }
+
+@detectDelim

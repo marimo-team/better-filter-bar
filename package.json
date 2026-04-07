@@ -1,0 +1,74 @@
+{
+  "name": "better-filter-bar",
+  "version": "0.0.0",
+  "description": "A generic, schema-driven structured filter bar built on CodeMirror 6.",
+  "homepage": "https://github.com/marimo-io/better-filter-bar#readme",
+  "bugs": {
+    "url": "https://github.com/marimo-io/better-filter-bar/issues"
+  },
+  "license": "MIT",
+  "author": "marimo team",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marimo-io/better-filter-bar.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./react": "./dist/react/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build:grammar": "vp exec lezer-generator src/language/fql.grammar -o src/language/fql.js",
+    "build": "vp run build:grammar && vp pack",
+    "dev": "vp pack --watch",
+    "demo": "vp dev demo",
+    "demo:build": "vp build demo",
+    "test": "vp test",
+    "check": "vp check",
+    "prepublishOnly": "vp run build",
+    "prepare": "vp config"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/lint": "^6.9.5",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
+    "@lezer/common": "^1.5.1",
+    "@lezer/lr": "^1.4.8",
+    "codemirror": "^6.0.2"
+  },
+  "devDependencies": {
+    "@lezer/generator": "^1.8.0",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "7.0.0-dev.20260328.1",
+    "bumpp": "^11.0.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^6.0.2",
+    "vite-plus": "^0.1.14"
+  },
+  "peerDependencies": {
+    "react": ">=17",
+    "react-dom": ">=17"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "packageManager": "pnpm@10.33.0"
+}

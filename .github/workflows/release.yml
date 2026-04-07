@@ -1,0 +1,87 @@
+name: Release
+
+permissions:
+  id-token: write
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ⎔ Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: ⎔ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@latest
+
+      - name: 📥 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🧪 Test
+        run: pnpm run test
+
+      - name: 🏗️ Build
+        run: pnpm run build
+
+      - name: 📦 Validate build artifacts
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ dist directory is missing"
+            exit 1
+          fi
+
+          if [ -z "$(ls -A dist)" ]; then
+            echo "❌ dist directory is empty"
+            exit 1
+          fi
+
+          if [ ! -f "dist/index.mjs" ] || [ ! -f "dist/index.d.mts" ]; then
+            echo "❌ Missing required files in dist/"
+            echo "Required: index.mjs and index.d.mts"
+            echo "Found: $(ls dist)"
+            exit 1
+          fi
+
+          if [ ! -f "dist/react/index.mjs" ] || [ ! -f "dist/react/index.d.mts" ]; then
+            echo "❌ Missing react entry point in dist/"
+            echo "Found: $(ls dist/react 2>/dev/null || echo 'no react dir')"
+            exit 1
+          fi
+
+          echo "✅ Build artifacts validation passed"
+
+      - name: 📦 Publish to NPM
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ""
+
+      - name: 📝 Update Changelog
+        run: npx changelogithub
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+      - name: 📣 Notify release result
+        if: always()
+        uses: marimo-team/internal-gh-actions/release-notification@main
+        with:
+          status: ${{ job.status }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_RELEASES }}
+          artifact-url: "https://npmjs.com/package/better-filter-bar"
