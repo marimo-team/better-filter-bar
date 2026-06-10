@@ -2,15 +2,15 @@
   "name": "better-filter-bar",
   "version": "0.1.0",
   "description": "A generic, schema-driven structured filter bar built on CodeMirror 6.",
-  "homepage": "https://github.com/marimo-io/better-filter-bar#readme",
+  "homepage": "https://github.com/marimo-team/better-filter-bar#readme",
   "bugs": {
-    "url": "https://github.com/marimo-io/better-filter-bar/issues"
+    "url": "https://github.com/marimo-team/better-filter-bar/issues"
   },
   "license": "MIT",
   "author": "marimo team",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/marimo-io/better-filter-bar.git"
+    "url": "git+https://github.com/marimo-team/better-filter-bar.git"
   },
   "files": [
     "dist"
