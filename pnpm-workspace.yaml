@@ -12,3 +12,12 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
     vitest: "*"
+packages:
+  - .
+minimumReleaseAge: 20160
+verifyDepsBeforeRun: install
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+minimumReleaseAgeExclude:
+  - "@marimo-team/*"
+onlyBuiltDependencies: []
