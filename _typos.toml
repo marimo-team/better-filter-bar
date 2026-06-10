@@ -1,0 +1,11 @@
+[default]
+extend-ignore-re = [
+  # URL-encoded "café" in test fixtures
+  "caf%C3%A9",
+]
+
+[files]
+extend-exclude = [
+  # Generated Lezer parser tables
+  "src/language/fql.js",
+]

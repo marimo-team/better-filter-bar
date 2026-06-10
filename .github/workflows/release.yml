@@ -1,0 +1,135 @@
+name: Release
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: ⎔ Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+
+      - name: ⎔ Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 📥 Install dependencies
+        run: pnpm install --ignore-scripts --frozen-lockfile
+
+      - name: 🔍 Check
+        run: pnpm run check
+
+      - name: 🧪 Test
+        run: pnpm run test
+
+      - name: 🏗️ Build
+        run: pnpm run build
+
+      - name: 📦 Validate build artifacts
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ dist directory is missing"
+            exit 1
+          fi
+
+          if [ -z "$(ls -A dist)" ]; then
+            echo "❌ dist directory is empty"
+            exit 1
+          fi
+
+          if [ ! -f "dist/index.mjs" ] || [ ! -f "dist/index.d.mts" ]; then
+            echo "❌ Missing required files in dist/"
+            echo "Required: index.mjs and index.d.mts"
+            echo "Found: $(ls dist)"
+            exit 1
+          fi
+
+          if [ ! -f "dist/react/index.mjs" ] || [ ! -f "dist/react/index.d.mts" ]; then
+            echo "❌ Missing react entry point in dist/"
+            echo "Found: $(ls dist/react 2>/dev/null || echo 'no react dir')"
+            exit 1
+          fi
+
+          echo "✅ Build artifacts validation passed"
+
+      - name: 📤 Upload package artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: package
+          path: |
+            dist/
+            package.json
+            README.md
+            LICENSE
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: 📥 Download package artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: package
+
+      - name: ⎔ Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+
+      - name: ⎔ Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: 📦 Publish to NPM
+        run: pnpm publish --no-git-checks --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: "" # Clear placeholder set by setup-node to enable OIDC
+
+  release-notes:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: ⎔ Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: 📝 Update Changelog
+        run: npx changelogithub@14.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    needs: [build, publish, release-notes]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📣 Notify release result
+        uses: marimo-team/internal-gh-actions/release-notification@91f15bebd3f322db6717ba5a17983928a47ec991 # main
+        with:
+          status: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'failure' || 'success' }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_RELEASES }}
+          artifact-url: "https://npmjs.com/package/better-filter-bar"
