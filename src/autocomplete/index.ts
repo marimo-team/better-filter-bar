@@ -1,11 +1,15 @@
 import {
   autocompletion,
+  startCompletion,
+  type Completion,
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import { type AutocompleteCtx, detectContext } from "./context.ts";
-import type { FilterSchema } from "../types.ts";
+import { AsyncValueCache, normalizeQuery, type ValueFetcher } from "./asyncValues.ts";
+import type { EnumOption, FilterSchema } from "../types.ts";
 import { findFieldByName } from "../utils.ts";
 
 const OPERATORS_FOR_TYPE: Record<string, string[]> = {
@@ -19,15 +23,51 @@ const OPERATORS_FOR_TYPE: Record<string, string[]> = {
 /** validFor regex that accepts both bare words and quoted strings */
 const VALID_FOR_VALUE = /^"?[\w .-]*"?$/;
 
+/** Placeholder row shown while an async value fetch is in flight. */
+const LOADING_OPTION: Completion = {
+  label: "Loading suggestions…",
+  type: "fql-loading",
+  apply: () => {},
+  boost: -99,
+};
+
+/** Row shown when an async value fetch rejects. */
+const ERROR_OPTION: Completion = {
+  label: "Failed to load suggestions",
+  type: "fql-error",
+  apply: () => {},
+};
+
+/** Hooks for injecting behavior into the completion source (chiefly for tests). */
+export interface CompletionSourceHooks {
+  /** Re-trigger completion after an async fetch settles. Default: `startCompletion` when focused. */
+  requery?: (view: EditorView) => void;
+  /** Injectable clock for the async value cache. */
+  now?: () => number;
+}
+
 export function fqlCompletion(schema: FilterSchema): Extension {
   return autocompletion({
     override: [createCompletionSource(schema)],
     icons: false,
+    optionClass: (c) =>
+      c.type === "fql-loading"
+        ? "fql-completion-loading"
+        : c.type === "fql-error"
+          ? "fql-completion-error"
+          : "",
   });
 }
 
-export function createCompletionSource(schema: FilterSchema) {
-  return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
+export function createCompletionSource(schema: FilterSchema, hooks: CompletionSourceHooks = {}) {
+  const cache = new AsyncValueCache({ now: hooks.now });
+  const requery =
+    hooks.requery ??
+    ((view: EditorView) => {
+      if (view.hasFocus) startCompletion(view);
+    });
+
+  return (ctx: CompletionContext): CompletionResult | null => {
     const context = detectContext(ctx, schema);
 
     switch (context.type) {
@@ -36,7 +76,7 @@ export function createCompletionSource(schema: FilterSchema) {
       case "OPERATOR":
         return operatorCompletions(context, schema);
       case "VALUE":
-        return await valueCompletions(context, schema);
+        return valueCompletions(context, schema, ctx, cache, requery);
       case "BOOLEAN_OP":
         return booleanOpCompletions(context);
       default:
@@ -48,6 +88,24 @@ export function createCompletionSource(schema: FilterSchema) {
 function quoteIfNeeded(value: string): string {
   if (value.includes(" ")) return `"${value}"`;
   return value;
+}
+
+function enumOptionToCompletion(opt: EnumOption): Completion {
+  return {
+    label: opt.value,
+    displayLabel: opt.label ?? opt.value,
+    info: opt.description,
+    type: "constant",
+    apply: quoteIfNeeded(opt.value),
+  };
+}
+
+function stringToCompletion(value: string): Completion {
+  return {
+    label: value,
+    type: "constant",
+    apply: quoteIfNeeded(value),
+  };
 }
 
 function fieldNameCompletions(
@@ -95,25 +153,36 @@ function operatorCompletions(
   };
 }
 
-async function valueCompletions(
+function valueCompletions(
   context: Extract<AutocompleteCtx, { type: "VALUE" }>,
   schema: FilterSchema,
-): Promise<CompletionResult | null> {
+  cmCtx: CompletionContext,
+  cache: AsyncValueCache,
+  requery: (view: EditorView) => void,
+): CompletionResult | null {
   const field = findFieldByName(context.fieldName, schema);
   if (!field) return null;
 
   const from = context.from;
 
+  if (field.type === "enum" && field.optionsAsync) {
+    return asyncValueResult({
+      cmCtx,
+      cache,
+      requery,
+      from,
+      fieldName: field.name,
+      prefix: context.prefix,
+      fetcher: field.optionsAsync,
+      provisional: (field.options ?? []).map(enumOptionToCompletion),
+      toCompletion: enumOptionToCompletion,
+    });
+  }
+
   if (field.type === "enum") {
     return {
       from,
-      options: field.options.map((opt) => ({
-        label: opt.value,
-        displayLabel: opt.label ?? opt.value,
-        info: opt.description,
-        type: "constant" as const,
-        apply: quoteIfNeeded(opt.value),
-      })),
+      options: (field.options ?? []).map(enumOptionToCompletion),
       validFor: VALID_FOR_VALUE,
     };
   }
@@ -141,31 +210,79 @@ async function valueCompletions(
   }
 
   if (field.type === "text" && field.suggestionsAsync) {
-    const results = await field.suggestionsAsync(context.prefix);
-    return {
+    return asyncValueResult({
+      cmCtx,
+      cache,
+      requery,
       from,
-      options: results.map((r) => ({
-        label: r,
-        type: "constant" as const,
-        apply: quoteIfNeeded(r),
-      })),
-      validFor: VALID_FOR_VALUE,
-    };
+      fieldName: field.name,
+      prefix: context.prefix,
+      fetcher: field.suggestionsAsync,
+      provisional: (field.suggestions ?? []).map(stringToCompletion),
+      toCompletion: stringToCompletion,
+    });
   }
 
   if (field.type === "text" && field.suggestions) {
     return {
       from,
-      options: field.suggestions.map((s) => ({
-        label: s,
-        type: "constant" as const,
-        apply: quoteIfNeeded(s),
-      })),
+      options: field.suggestions.map(stringToCompletion),
       validFor: VALID_FOR_VALUE,
     };
   }
 
   return null;
+}
+
+interface AsyncValueParams<T> {
+  cmCtx: CompletionContext;
+  cache: AsyncValueCache;
+  requery: (view: EditorView) => void;
+  from: number;
+  fieldName: string;
+  prefix: string;
+  fetcher: ValueFetcher<T>;
+  provisional: Completion[];
+  toCompletion: (item: T) => Completion;
+}
+
+/**
+ * Render a value completion result for an async field. Returns synchronously:
+ * a loading placeholder (plus any provisional static options) while pending, the
+ * mapped options once resolved, or an error row on failure. When a fetch is
+ * started here, it re-triggers completion via `requery` on settle.
+ */
+function asyncValueResult<T>(p: AsyncValueParams<T>): CompletionResult {
+  const query = normalizeQuery(p.prefix);
+  const view = p.cmCtx.view;
+  const state = p.cache.lookup(p.fieldName, query, p.fetcher, {
+    explicit: p.cmCtx.explicit,
+    onSettled: () => {
+      if (view) p.requery(view);
+    },
+  });
+
+  if (state.status === "resolved") {
+    return {
+      from: p.from,
+      options: state.items.map(p.toCompletion),
+      validFor: VALID_FOR_VALUE,
+    };
+  }
+
+  if (state.status === "error") {
+    return {
+      from: p.from,
+      options: [ERROR_OPTION],
+      filter: false,
+    };
+  }
+
+  return {
+    from: p.from,
+    options: [...p.provisional, LOADING_OPTION],
+    filter: false,
+  };
 }
 
 function booleanOpCompletions(

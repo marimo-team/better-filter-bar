@@ -158,14 +158,18 @@ function validateValue(
   }
 
   if (field.type === "enum") {
-    const match = field.options.find((o) => o.value.toLowerCase() === unquoted.toLowerCase());
-    if (!match) {
-      out.push({
-        from: node.from,
-        to: node.to,
-        severity: "warning",
-        message: `"${unquoted}" is not a known value for "${field.name}". Valid: ${field.options.map((o) => o.value).join(", ")}`,
-      });
+    // Values resolved via `optionsAsync` (or absent static options) can't be
+    // enumerated statically, so skip unknown-value validation for those fields.
+    if (field.options && !field.optionsAsync) {
+      const match = field.options.find((o) => o.value.toLowerCase() === unquoted.toLowerCase());
+      if (!match) {
+        out.push({
+          from: node.from,
+          to: node.to,
+          severity: "warning",
+          message: `"${unquoted}" is not a known value for "${field.name}". Valid: ${field.options.map((o) => o.value).join(", ")}`,
+        });
+      }
     }
   }
 

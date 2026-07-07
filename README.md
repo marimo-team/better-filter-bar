@@ -114,13 +114,60 @@ interface FilterSchema {
 
 ### Field Types
 
-| Type      | Operators                      | Notes                                      |
-| --------- | ------------------------------ | ------------------------------------------ |
-| `text`    | `:`                            | Static or async suggestions                |
-| `enum`    | `:`                            | Declared options, multi-value via `:(a,b)` |
-| `number`  | `:` `=` `!=` `>` `>=` `<` `<=` | Optional `min`/`max`                       |
-| `date`    | `:` `=` `!=` `>` `>=` `<` `<=` | Relative dates supported                   |
-| `boolean` | `:`                            | `true`/`false`/`yes`/`no`/`1`/`0`          |
+| Type      | Operators                      | Notes                                               |
+| --------- | ------------------------------ | --------------------------------------------------- |
+| `text`    | `:`                            | Static or async suggestions                         |
+| `enum`    | `:`                            | Declared or async options, multi-value via `:(a,b)` |
+| `number`  | `:` `=` `!=` `>` `>=` `<` `<=` | Optional `min`/`max`                                |
+| `date`    | `:` `=` `!=` `>` `>=` `<` `<=` | Relative dates supported                            |
+| `boolean` | `:`                            | `true`/`false`/`yes`/`no`/`1`/`0`                   |
+
+### Async value suggestions
+
+Both `text` and `enum` fields can lazily load their value suggestions from a
+promise — useful for fetching distinct values (assignees, labels, authors) from
+an API when the user starts completing a value:
+
+```ts
+const schema: FilterSchema = {
+  fields: [
+    {
+      name: "author",
+      label: "Author",
+      type: "text",
+      // Called with the current value prefix and an AbortSignal.
+      suggestionsAsync: async (query, { signal }) => {
+        const res = await fetch(`/api/authors?q=${query}`, { signal });
+        return (await res.json()) as string[];
+      },
+    },
+    {
+      name: "assignee",
+      label: "Assignee",
+      type: "enum",
+      // Static `options` (if provided) are shown as provisional results while loading.
+      optionsAsync: async (query, { signal }) => {
+        const res = await fetch(`/api/assignees?q=${query}`, { signal });
+        return (await res.json()) as EnumOption[]; // { value, label?, description? }[]
+      },
+    },
+  ],
+};
+```
+
+Behavior:
+
+- **Loading** — while the promise is in flight the dropdown shows a spinning
+  `Loading suggestions…` row (plus any static `suggestions`/`options` as
+  provisional results). It refreshes automatically once the fetch settles.
+- **Error** — if the promise rejects, a `Failed to load suggestions` row is
+  shown. Continuing to type retries; an error is cached briefly (~5s) so a
+  broken endpoint isn't hammered on every keystroke.
+- **Caching & cancellation** — results are cached per `(field, query)` (~30s),
+  concurrent lookups for the same query are de-duplicated, and typing a new
+  prefix aborts the previous in-flight fetch (via the provided `signal`).
+- **Linting** — `enum` fields with `optionsAsync` skip unknown-value validation,
+  since valid values can't be enumerated statically.
 
 ### `FilterBarProps` (React)
 

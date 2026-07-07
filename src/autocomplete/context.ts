@@ -91,8 +91,11 @@ export function detectContext(ctx: CompletionContext, schema: FilterSchema): Aut
       // We're editing a field name that already has an operator
       return { type: "FIELD_NAME", prefix: text, from: node.from };
     }
-    // An exact, unambiguous field name with nothing after it → offer operators
-    if (isExactUnambiguousField(text, schema)) {
+    // An exact, unambiguous field name with nothing after it → offer operators.
+    // Gate on the cursor being at the end of the token so editing the middle of a
+    // longer word (e.g. "priorityX" with the cursor after "priority") doesn't
+    // surface operator completions.
+    if (pos === node.to && isExactUnambiguousField(text, schema)) {
       return { type: "OPERATOR", fieldName: text, from: pos };
     }
     // Check if this word could be a field name

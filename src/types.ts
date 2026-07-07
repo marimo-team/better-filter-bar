@@ -4,6 +4,18 @@ export type FieldType = "text" | "enum" | "number" | "date" | "boolean";
 
 export type TextMatchMode = "exact" | "contains" | "starts_with";
 
+/** A single option for an enum field. */
+export interface EnumOption {
+  value: string;
+  label?: string;
+  description?: string;
+}
+
+/** Context passed to async value fetchers, carrying an AbortSignal for cancellation. */
+export interface AsyncValueContext {
+  signal: AbortSignal;
+}
+
 export interface BaseFieldDef {
   /** Unique machine key used in queries, e.g. "created_at" */
   name: string;
@@ -19,12 +31,24 @@ export interface TextField extends BaseFieldDef {
   type: "text";
   matchMode?: TextMatchMode;
   suggestions?: string[];
-  suggestionsAsync?: (query: string) => Promise<string[]>;
+  /**
+   * Lazily fetch value suggestions for this field. The dropdown shows a loading
+   * row while the promise is in flight and an error row if it rejects. Static
+   * `suggestions`, if also present, are shown as provisional options during load.
+   */
+  suggestionsAsync?: (query: string, ctx: AsyncValueContext) => Promise<string[]>;
 }
 
 export interface EnumField extends BaseFieldDef {
   type: "enum";
-  options: Array<{ value: string; label?: string; description?: string }>;
+  options?: EnumOption[];
+  /**
+   * Lazily fetch enum options for this field. The dropdown shows a loading row
+   * while the promise is in flight and an error row if it rejects. Static
+   * `options`, if also present, are shown as provisional options during load.
+   * When set, the linter skips unknown-value validation for this field.
+   */
+  optionsAsync?: (query: string, ctx: AsyncValueContext) => Promise<EnumOption[]>;
   /** Allow multiple values via :(v1,v2) syntax. Default: true */
   multi?: boolean;
 }

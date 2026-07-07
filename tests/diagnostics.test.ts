@@ -264,6 +264,22 @@ describe("diagnostics snapshots", () => {
     expect(lint("status:Open")).toMatchInlineSnapshot("[]");
   });
 
+  it("enum with only optionsAsync → no unknown-value diagnostic", () => {
+    const asyncEnumSchema: FilterSchema = {
+      ...BASE_SCHEMA,
+      fields: [
+        ...BASE_SCHEMA.fields,
+        {
+          name: "assignee",
+          label: "Assignee",
+          type: "enum",
+          optionsAsync: async () => [{ value: "alice" }],
+        },
+      ],
+    };
+    expect(lint("assignee:zzz", asyncEnumSchema)).toEqual([]);
+  });
+
   it("unknown enum value in multi-value list", () => {
     expect(lint("status:(open,invalid)")).toMatchInlineSnapshot(`
       [
