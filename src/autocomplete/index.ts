@@ -90,6 +90,7 @@ function operatorCompletions(
     options: ops.map((op) => ({
       label: op,
       type: "operator" as const,
+      apply: op,
     })),
   };
 }
