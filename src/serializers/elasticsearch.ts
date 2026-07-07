@@ -20,7 +20,9 @@ function buildES(node: ExprNode): ESQuery {
       return { match_all: {} };
 
     case "free_text":
-      return { query_string: { query: node.value } };
+      // simple_query_string never throws on malformed input and does not
+      // allow field-scoped or regex clauses — safe for user-typed text.
+      return { simple_query_string: { query: node.value } };
 
     case "filter":
       return buildFilterES(node);
