@@ -1,6 +1,6 @@
 {
   "name": "better-filter-bar",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A generic, schema-driven structured filter bar built on CodeMirror 6.",
   "homepage": "https://github.com/marimo-team/better-filter-bar#readme",
   "bugs": {
