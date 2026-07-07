@@ -348,6 +348,15 @@ describe("OPERATOR context", () => {
     expect(detect("unknownword").type).not.toBe("OPERATOR");
   });
 
+  it("cursor mid-token in a longer word → not OPERATOR", () => {
+    // doc "priorityX" with the cursor after "priority" (inside the token) must
+    // not offer operator completions — it's an exact field-name prefix but the
+    // cursor isn't at the end of the parsed word.
+    const state = EditorState.create({ doc: "priorityX", extensions: [fql(schema)] });
+    const ctx = new CompletionContext(state, 8, true);
+    expect(detectContext(ctx, schema).type).not.toBe("OPERATOR");
+  });
+
   it("exact match that is a prefix of another field → FIELD_NAME (ambiguous)", () => {
     const ambiguousSchema: FilterSchema = {
       fields: [
