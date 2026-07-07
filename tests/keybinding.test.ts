@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { acceptCompletion } from "@codemirror/autocomplete";
+import { insertNewlineAndIndent } from "@codemirror/commands";
 import { filterBarExtensions } from "../src/extensions/index.ts";
 import type { FilterSchema } from "../src/types.ts";
 
@@ -24,5 +25,21 @@ describe("keybindings", () => {
     const tabBinding = keymaps.flat().find((binding) => binding.key === "Tab");
     expect(tabBinding).toBeDefined();
     expect(tabBinding!.run).toBe(acceptCompletion);
+  });
+
+  it("Enter is bound to submit ahead of insertNewlineAndIndent", () => {
+    const state = EditorState.create({
+      doc: "",
+      extensions: filterBarExtensions(schema),
+    });
+    // Precedence-ordered: the resolved keymap facet lists higher-precedence
+    // bindings first. The first Enter binding must be our submit handler, not
+    // defaultKeymap's newline insertion.
+    const enterBinding = state
+      .facet(keymap)
+      .flat()
+      .find((binding) => binding.key === "Enter");
+    expect(enterBinding).toBeDefined();
+    expect(enterBinding!.run).not.toBe(insertNewlineAndIndent);
   });
 });
