@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useMemo, useEffectEvent } from "react";
 import { EditorView, placeholder as placeholderExt } from "@codemirror/view";
 import { Compartment, EditorState } from "@codemirror/state";
-import { completionStatus } from "@codemirror/autocomplete";
 import { filterBarExtensions } from "../extensions/index.ts";
-import { parseQuery } from "../parser/index.ts";
 import type { FilterSchema, FilterBarOptions, FilterAST } from "../types.ts";
 
 export interface FilterBarProps extends FilterBarOptions {
@@ -37,10 +35,10 @@ export const FilterBar = React.memo(function FilterBar({
     onChange?.(ast, raw);
   });
 
-  const handleSubmit = useEffectEvent((view: EditorView) => {
-    if (completionStatus(view.state) !== null) return;
-    const ast = parseQuery(view.state.doc.toString(), schema);
-    onSubmit?.(ast, view.state.doc.toString());
+  // Submit is handled by the core extension bundle's high-precedence keymap;
+  // this just forwards to the latest onSubmit prop.
+  const handleSubmit = useEffectEvent((ast: FilterAST, raw: string) => {
+    onSubmit?.(ast, raw);
   });
 
   useEffect(() => {
@@ -50,16 +48,11 @@ export const FilterBar = React.memo(function FilterBar({
       state: EditorState.create({
         doc: initialValue,
         extensions: [
-          schemaCompartment.of(filterBarExtensions(schema, { onChange: handleChange })),
+          schemaCompartment.of(
+            filterBarExtensions(schema, { onChange: handleChange, onSubmit: handleSubmit }),
+          ),
           editableCompartment.of(EditorView.editable.of(!readOnly)),
           placeholder ? placeholderExt(placeholder) : [],
-          EditorView.domEventHandlers({
-            keydown(event, view) {
-              if (event.key === "Enter" && !event.shiftKey) {
-                handleSubmit(view);
-              }
-            },
-          }),
         ],
       }),
       parent: containerRef.current,
@@ -83,7 +76,7 @@ export const FilterBar = React.memo(function FilterBar({
   useEffect(() => {
     internalViewRef.current?.dispatch({
       effects: schemaCompartment.reconfigure(
-        filterBarExtensions(schema, { onChange: handleChange }),
+        filterBarExtensions(schema, { onChange: handleChange, onSubmit: handleSubmit }),
       ),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

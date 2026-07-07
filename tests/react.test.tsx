@@ -123,6 +123,41 @@ describe("FilterBar", () => {
     act(() => root.unmount());
   });
 
+  it("onSubmit fires with the parsed AST when Enter is pressed", () => {
+    const viewRef = React.createRef<EditorView | null>();
+    const onSubmit = vi.fn();
+    const { root } = mount(
+      <FilterBar
+        schema={BASE_SCHEMA}
+        viewRef={viewRef}
+        onSubmit={onSubmit}
+        initialValue="status:open"
+      />,
+    );
+    act(() => {
+      viewRef.current!.contentDOM.focus();
+      viewRef.current!.contentDOM.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        type: "filter",
+        field: "status",
+        operator: ":",
+        value: { kind: "string", value: "open" },
+      },
+      "status:open",
+    );
+    act(() => root.unmount());
+  });
+
   it("renders a placeholder when empty", () => {
     const { container, root } = mount(<FilterBar schema={BASE_SCHEMA} placeholder="Filter…" />);
     const ph = container.querySelector(".cm-placeholder");

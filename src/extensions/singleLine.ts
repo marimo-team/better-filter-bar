@@ -1,12 +1,10 @@
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 
-export const singleLineKeymap: Extension = keymap.of([
-  { key: "Enter", run: () => true },
-  { key: "Shift-Enter", run: () => true },
-]);
-
+// Enter/Shift-Enter are owned by the high-precedence submit keymap in
+// filterBarExtensions. This filter remains as the paste-safety net: any newline
+// that reaches the document (e.g. from a paste) is flattened to a space.
 export const singleLineFilter: Extension = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr;
   const newDoc = tr.newDoc.toString();
@@ -24,4 +22,4 @@ export const singleLineFilter: Extension = EditorState.transactionFilter.of((tr)
   return tr;
 });
 
-export const singleLine: Extension = [singleLineKeymap, singleLineFilter, EditorView.lineWrapping];
+export const singleLine: Extension = [singleLineFilter, EditorView.lineWrapping];
