@@ -91,6 +91,10 @@ export function detectContext(ctx: CompletionContext, schema: FilterSchema): Aut
       // We're editing a field name that already has an operator
       return { type: "FIELD_NAME", prefix: text, from: node.from };
     }
+    // An exact, unambiguous field name with nothing after it → offer operators
+    if (isExactUnambiguousField(text, schema)) {
+      return { type: "OPERATOR", fieldName: text, from: pos };
+    }
     // Check if this word could be a field name
     if (isKnownField(text, schema) || isPartialField(text, schema)) {
       return { type: "FIELD_NAME", prefix: text, from: node.from };
@@ -135,6 +139,17 @@ function extractFieldBeforeColon(before: string): string | null {
 
 function isKnownField(name: string, schema: FilterSchema): boolean {
   return findFieldByName(name, schema) !== undefined;
+}
+
+function isExactUnambiguousField(word: string, schema: FilterSchema): boolean {
+  const lower = word.toLowerCase();
+  const exact = schema.fields.some((f) => f.name.toLowerCase() === lower);
+  if (!exact) return false;
+  // If another field name extends this word, keep offering field completions.
+  const extendedBy = schema.fields.some(
+    (f) => f.name.toLowerCase() !== lower && f.name.toLowerCase().startsWith(lower),
+  );
+  return !extendedBy;
 }
 
 function isPartialField(prefix: string, schema: FilterSchema): boolean {

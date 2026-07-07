@@ -278,6 +278,128 @@ describe("detectContext", () => {
 });
 
 // ==============================================================
+// OPERATOR context
+// ==============================================================
+
+describe("OPERATOR context", () => {
+  it("exact number field name → OPERATOR", () => {
+    expect(detect("priority")).toMatchInlineSnapshot(`
+      {
+        "fieldName": "priority",
+        "from": 8,
+        "type": "OPERATOR",
+      }
+    `);
+  });
+
+  it("exact date field name → OPERATOR", () => {
+    expect(detect("created")).toMatchInlineSnapshot(`
+      {
+        "fieldName": "created",
+        "from": 7,
+        "type": "OPERATOR",
+      }
+    `);
+  });
+
+  it("exact enum field name → OPERATOR", () => {
+    expect(detect("status")).toMatchInlineSnapshot(`
+      {
+        "fieldName": "status",
+        "from": 6,
+        "type": "OPERATOR",
+      }
+    `);
+  });
+
+  it("case-insensitive exact match → OPERATOR", () => {
+    const result = detect("PRIORITY");
+    expect(result.type).toBe("OPERATOR");
+    expect(result).toMatchObject({ fieldName: "PRIORITY", from: 8 });
+  });
+
+  it("partial field name → FIELD_NAME (not OPERATOR)", () => {
+    expect(detect("pri").type).toBe("FIELD_NAME");
+  });
+
+  it("exact match after a complete filter → OPERATOR", () => {
+    expect(detect("status:open priority")).toMatchInlineSnapshot(`
+      {
+        "fieldName": "priority",
+        "from": 20,
+        "type": "OPERATOR",
+      }
+    `);
+  });
+
+  it("partial field mid-query → FIELD_NAME (not OPERATOR)", () => {
+    expect(detect("status:open pri").type).toBe("FIELD_NAME");
+  });
+
+  it("operator already typed → VALUE (not OPERATOR)", () => {
+    expect(detect("priority>").type).toBe("VALUE");
+  });
+
+  it("colon already typed → VALUE (not OPERATOR)", () => {
+    expect(detect("priority:").type).toBe("VALUE");
+  });
+
+  it("unknown word → not OPERATOR", () => {
+    expect(detect("unknownword").type).not.toBe("OPERATOR");
+  });
+
+  it("exact match that is a prefix of another field → FIELD_NAME (ambiguous)", () => {
+    const ambiguousSchema: FilterSchema = {
+      fields: [
+        { name: "created", label: "Created", type: "date" },
+        { name: "created_by", label: "Created By", type: "text" },
+      ],
+    };
+    const state = EditorState.create({ doc: "created", extensions: [fql(ambiguousSchema)] });
+    const ctx = new CompletionContext(state, 7, true);
+    expect(detectContext(ctx, ambiguousSchema).type).toBe("FIELD_NAME");
+  });
+});
+
+describe("autocomplete: operator completions", () => {
+  it("number field returns all comparison operators in order", async () => {
+    const result = await getCompletions("priority");
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    expect(labels).toEqual([":", "=", "!=", ">", ">=", "<", "<="]);
+    expect(result!.options.every((o) => o.type === "operator")).toBe(true);
+  });
+
+  it("enum field returns just colon", async () => {
+    const result = await getCompletions("status");
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    expect(labels).toEqual([":"]);
+  });
+
+  it("operator options carry an explicit apply", async () => {
+    const result = await getCompletions("priority");
+    expect(result).not.toBeNull();
+    const gte = result!.options.find((o) => o.label === ">=");
+    expect(gte!.apply).toBe(">=");
+  });
+
+  it("applying an operator hands off to VALUE completion", () => {
+    // Selecting ">=" after "priority" yields "priority>=", where the next
+    // context is a VALUE for the priority field.
+    expect(detect("priority>=")).toMatchInlineSnapshot(`
+      {
+        "fieldName": "priority",
+        "from": 10,
+        "operator": ">=",
+        "prefix": "",
+        "type": "VALUE",
+      }
+    `);
+  });
+});
+
+// ==============================================================
 // Completion results: value types
 // ==============================================================
 
