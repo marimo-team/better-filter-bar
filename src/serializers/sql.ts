@@ -18,8 +18,8 @@ function buildSQL(node: ExprNode, params: unknown[]): string {
       return "1 = 1";
 
     case "free_text": {
-      params.push(`%${node.value}%`);
-      return "_text LIKE ?";
+      params.push(`%${escapeLike(node.value)}%`);
+      return "_text LIKE ? ESCAPE '\\'";
     }
 
     case "filter":
@@ -74,4 +74,9 @@ function operatorToSQL(op: FilterNode["operator"]): string {
 
 function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
+}
+
+/** Escape LIKE metacharacters so free text matches literally. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }

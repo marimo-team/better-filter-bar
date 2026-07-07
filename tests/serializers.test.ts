@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { toElasticsearch } from "../src/serializers/elasticsearch.ts";
 import { toSQL } from "../src/serializers/sql.ts";
 import { toURLParams } from "../src/serializers/url-params.ts";
-import type { FilterSchema } from "../src/types.ts";
+import type { ExprNode, FilterSchema } from "../src/types.ts";
 import { BASE_SCHEMA, createParse } from "./test-utils.ts";
 
 const schema: FilterSchema = {
@@ -11,6 +11,9 @@ const schema: FilterSchema = {
 };
 
 const parse = createParse(schema);
+
+/** Build a free-text AST node directly, bypassing the parser. */
+const freeText = (value: string): ExprNode => ({ type: "free_text", value });
 
 // ================================================================
 // toSQL
@@ -245,7 +248,7 @@ describe("toSQL", () => {
         "params": [
           "%hello%",
         ],
-        "sql": "_text LIKE ?",
+        "sql": "_text LIKE ? ESCAPE '\\'",
       }
     `);
   });
@@ -256,9 +259,25 @@ describe("toSQL", () => {
         "params": [
           "%bug report%",
         ],
-        "sql": "_text LIKE ?",
+        "sql": "_text LIKE ? ESCAPE '\\'",
       }
     `);
+  });
+
+  it("escapes LIKE percent wildcard in free text", () => {
+    const result = toSQL(freeText("100%"));
+    expect(result.sql).toBe("_text LIKE ? ESCAPE '\\'");
+    expect(result.params).toEqual(["%100\\%%"]);
+  });
+
+  it("escapes LIKE underscore and backslash in free text", () => {
+    const result = toSQL(freeText("a_b\\c"));
+    expect(result.params).toEqual(["%a\\_b\\\\c%"]);
+  });
+
+  it("leaves free text without metacharacters untouched", () => {
+    const result = toSQL(freeText("hello"));
+    expect(result.params).toEqual(["%hello%"]);
   });
 
   // ---------- boolean operators ----------
@@ -381,7 +400,7 @@ describe("toSQL", () => {
           "%bug report%",
           "open",
         ],
-        "sql": "(_text LIKE ? AND "status" = ?)",
+        "sql": "(_text LIKE ? ESCAPE '\\' AND "status" = ?)",
       }
     `);
   });
@@ -674,7 +693,7 @@ describe("toElasticsearch", () => {
   it("free text", () => {
     expect(toElasticsearch(parse("hello"))).toMatchInlineSnapshot(`
       {
-        "query_string": {
+        "simple_query_string": {
           "query": "hello",
         },
       }
@@ -684,11 +703,25 @@ describe("toElasticsearch", () => {
   it("quoted free text", () => {
     expect(toElasticsearch(parse('"bug report"'))).toMatchInlineSnapshot(`
       {
-        "query_string": {
+        "simple_query_string": {
           "query": "bug report",
         },
       }
     `);
+  });
+
+  it("maps plain free text to simple_query_string", () => {
+    expect(toElasticsearch(freeText("hello"))).toEqual({
+      simple_query_string: { query: "hello" },
+    });
+  });
+
+  it("does not interpret Lucene syntax in free text", () => {
+    const result = toElasticsearch(freeText("secret_field:* OR /re.*gex/"));
+    expect(result).toEqual({
+      simple_query_string: { query: "secret_field:* OR /re.*gex/" },
+    });
+    expect(JSON.stringify(result)).not.toContain('"query_string"');
   });
 
   // ---------- boolean operators ----------
@@ -911,7 +944,7 @@ describe("toElasticsearch", () => {
         "bool": {
           "must": [
             {
-              "query_string": {
+              "simple_query_string": {
                 "query": "bug report",
               },
             },
@@ -1375,7 +1408,7 @@ describe("toSQL edge cases", () => {
     	    "it",
     	    "%s"%",
     	  ],
-    	  "sql": "("label" = ? AND _text LIKE ?)",
+    	  "sql": "("label" = ? AND _text LIKE ? ESCAPE '\\')",
     	}
     `);
   });
@@ -1731,7 +1764,7 @@ describe("toElasticsearch edge cases", () => {
     	        },
     	      },
     	      {
-    	        "query_string": {
+    	        "simple_query_string": {
     	          "query": "s"",
     	        },
     	      },
