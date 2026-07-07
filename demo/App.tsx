@@ -1,6 +1,24 @@
 import { useState } from "react";
 import { FilterBar } from "../src/react/index.ts";
-import type { FilterAST, FilterSchema } from "../src/types.ts";
+import type { AsyncValueContext, EnumOption, FilterAST, FilterSchema } from "../src/types.ts";
+
+/** Abortable sleep — rejects with an AbortError if the signal fires first. */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    });
+  });
+}
+
+const ASSIGNEES: EnumOption[] = [
+  { value: "alice", label: "Alice", description: "Alice Anderson" },
+  { value: "bob", label: "Bob", description: "Bob Brown" },
+  { value: "carol", label: "Carol", description: "Carol Clark" },
+  { value: "dave", label: "Dave", description: "Dave Davis" },
+];
 
 const schema: FilterSchema = {
   fields: [
@@ -16,10 +34,31 @@ const schema: FilterSchema = {
       ],
     },
     {
+      // Text field with lazily-loaded suggestions (~600ms, abortable).
       name: "author",
       label: "Author",
       type: "text",
-      suggestions: ["alice", "bob", "charlie", "diana"],
+      suggestionsAsync: async (query: string, { signal }: AsyncValueContext) => {
+        await sleep(600, signal);
+        return ["alice", "bob", "charlie", "diana"].filter((n) =>
+          n.toLowerCase().startsWith(query.toLowerCase()),
+        );
+      },
+    },
+    {
+      // Async enum: fetches options lazily and occasionally fails to show the
+      // error row. The linter skips unknown-value validation for async enums.
+      name: "assignee",
+      label: "Assignee",
+      type: "enum",
+      optionsAsync: async (query: string, { signal }: AsyncValueContext) => {
+        await sleep(600, signal);
+        if (Math.random() < 0.25) throw new Error("Simulated fetch failure");
+        const q = query.toLowerCase();
+        return ASSIGNEES.filter(
+          (o) => o.value.startsWith(q) || (o.label ?? "").toLowerCase().startsWith(q),
+        );
+      },
     },
     {
       name: "label",
@@ -64,6 +103,7 @@ const EXAMPLE_QUERIES = [
   '(status:open OR status:draft) AND label:"needs review"',
   "created:>2024-01-01 author:bob",
   "is_blocked:true priority>=4",
+  "assignee:alice author:bob",
 ];
 
 // --- Theme definitions (demo-only, not part of the library) ---
@@ -420,7 +460,11 @@ export function App() {
                   </span>
                 </td>
                 <td style={{ padding: "8px 12px", color: "#666" }}>
-                  {f.type === "enum" && `Values: ${f.options.map((o) => o.value).join(", ")}`}
+                  {f.type === "enum" &&
+                    (f.optionsAsync
+                      ? "Values: loaded async"
+                      : `Values: ${(f.options ?? []).map((o) => o.value).join(", ")}`)}
+                  {f.type === "text" && f.suggestionsAsync && "Suggestions: loaded async"}
                   {f.type === "text" && f.suggestions && `Suggestions: ${f.suggestions.join(", ")}`}
                   {f.type === "number" && `Range: ${f.min ?? "∞"} – ${f.max ?? "∞"}`}
                   {f.type === "date" &&

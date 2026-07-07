@@ -109,6 +109,37 @@ export const filterBarTheme = EditorView.baseTheme({
   ".cm-completionIcon": {
     display: "none",
   },
+  // Async value loading/error rows
+  ".fql-completion-loading .cm-completionLabel": {
+    fontStyle: "italic",
+    color: "var(--fql-ac-info-color, #656d76)",
+  },
+  ".fql-completion-loading .cm-completionLabel::before": {
+    content: '""',
+    display: "inline-block",
+    width: "10px",
+    height: "10px",
+    marginRight: "8px",
+    verticalAlign: "-1px",
+    border: "1.5px solid currentColor",
+    borderTopColor: "transparent",
+    borderRadius: "50%",
+    opacity: "0.7",
+    animation: "fql-spin 0.6s linear infinite",
+  },
+  ".fql-completion-error .cm-completionLabel": {
+    fontStyle: "italic",
+    color: "var(--fql-error-color, #cf222e)",
+  },
+  // Keep the loading/error rows visually muted even when keyboard-selected.
+  ".cm-tooltip-autocomplete > ul > li.fql-completion-loading[aria-selected], .cm-tooltip-autocomplete > ul > li.fql-completion-error[aria-selected]":
+    {
+      background: "transparent",
+      color: "inherit",
+    },
+  "@keyframes fql-spin": {
+    to: { transform: "rotate(360deg)" },
+  },
   // Scrollbar
   ".cm-scroller": {
     overflow: "hidden",

@@ -20,6 +20,8 @@ export type { RelativeDateResolver } from "./transformers/index.ts";
 export type {
   FieldType,
   TextMatchMode,
+  EnumOption,
+  AsyncValueContext,
   BaseFieldDef,
   TextField,
   EnumField,
