@@ -14,7 +14,7 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
 
     permissions:
       contents: read
@@ -42,7 +42,7 @@ jobs:
         run: pnpm run test
 
   security:
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
@@ -55,7 +55,7 @@ jobs:
         uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4
 
   spelling:
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
